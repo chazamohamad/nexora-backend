@@ -1,0 +1,31 @@
+
+# Dependencies
+node_modules/
+
+# Build Output
+dist/
+
+# Environment Variables - NEVER PUSH SECRETS
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
