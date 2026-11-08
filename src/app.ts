@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 
+import authRoutes from "./routes/auth.routes.js";
+
 const app = express();
 
 // CORS Configuration
@@ -13,11 +15,14 @@ app.use(
 // Parse JSON Requests
 app.use(express.json());
 
+// Authentication Routes
+app.use("/api/auth", authRoutes);
+
 // Health Check API
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
-    message: "TeamFlow API is running",
+    message: "NEXORA API is running",
   });
 });
 
