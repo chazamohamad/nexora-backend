@@ -3,7 +3,7 @@ import { loginWithSupabase } from "../services/auth.service.js";
 
 export async function login(req: Request, res: Response) {
   const body = req.body as {
-    email?: unknown;
+    email?: unknown; // l ? yeene l email optional mmkn ykun mawjud w mmkn lae
     password?: unknown;
   };
 
@@ -23,7 +23,7 @@ export async function login(req: Request, res: Response) {
   }
 
   // Basic email validation
-  const normalizedEmail = email.trim();
+  const normalizedEmail = email.trim(); //shil l spaces mn lbideye wl niheye
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     return res.status(400).json({
