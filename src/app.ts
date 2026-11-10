@@ -13,7 +13,7 @@ app.use(
 );
 
 // Parse JSON Requests
-app.use(express.json()); //aya req mn l frontend bthawlu la format JSON la e2dr estaamel req.body
+app.use(express.json()); //aya req mn l frontend bthawlu la format JSON la e2dr estaamel req.body/req.params..
 
 // Authentication Routes
 app.use("/api/auth", authRoutes);

@@ -7,7 +7,7 @@ export async function login(req: Request, res: Response) {
     password?: unknown;
   };
 
-  const { email, password } = body;
+  const { email, password } = body; //destructuring l body la email w password
 
   // Validate required fields
   if (
