@@ -1,5 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { resolveEnv } from "@supabase/server/core";
+
+import { createContextClient, resolveEnv } from "@supabase/server/core";
+
+// ==========================================
+// 1. VALIDATE SUPABASE CONFIGURATION
+// ==========================================
 
 export function validateSupabaseConfig(): string {
   const { data, error } = resolveEnv();
@@ -29,9 +34,14 @@ export function validateSupabaseConfig(): string {
   return data.url;
 }
 
-// Create a new Auth Client for each login request
+// ==========================================
+// 2. CREATE AUTH CLIENT
+// Used for Login
+// ==========================================
+
 export function createSupabaseAuthClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
+
   const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
 
   if (!supabaseUrl || !publishableKey) {
@@ -43,6 +53,23 @@ export function createSupabaseAuthClient() {
       autoRefreshToken: false,
       persistSession: false,
       detectSessionInUrl: false,
+    },
+  });
+}
+
+// ==========================================
+// 3. CREATE USER-SCOPED SUPABASE CLIENT
+// Used for authenticated API requests
+// ==========================================
+
+export function createSupabaseUserClient(
+  token: string,
+  keyName?: string | null,
+) {
+  return createContextClient({
+    auth: {
+      token,
+      ...(keyName ? { keyName } : {}),
     },
   });
 }
