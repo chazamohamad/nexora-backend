@@ -4,6 +4,7 @@ export async function loginWithSupabase(email: string, password: string) {
   const supabase = createSupabaseAuthClient();
 
   const { data, error } = await supabase.auth.signInWithPassword({
+    //yeeni aam nstakhdem l Authentication Service lbi Supabase
     email,
     password,
   });

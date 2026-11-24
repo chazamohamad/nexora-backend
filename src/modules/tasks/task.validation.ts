@@ -125,7 +125,7 @@ export const updateTaskSchema = z.object({
 
       due_date: dateSchema.nullable().optional(),
     })
-    .strict()
+    .strict() //bterfud query parameters eza msh m3arfe bl schema
     .refine((data) => Object.keys(data).length > 0, {
       message: "At least one field must be provided",
     }),

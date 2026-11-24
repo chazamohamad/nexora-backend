@@ -1,4 +1,4 @@
-import type { RequestHandler } from "express";
+import type { RequestHandler } from "express"; //type jehez mn express la 3aref middleware
 
 import { verifyCredentials } from "@supabase/server/core";
 
@@ -11,7 +11,7 @@ import { createSupabaseUserClient } from "../config/supabase.js";
 export const authenticate: RequestHandler = async (req, res, next) => {
   // 1. Read Authorization Header
 
-  const authHeader = req.headers.authorization;
+  const authHeader = req.headers.authorization; //l http header bikun fi: Authorization: Bearer eyJhbGciOi...
 
   // 2. Extract Bearer Token
 
@@ -40,7 +40,7 @@ export const authenticate: RequestHandler = async (req, res, next) => {
       },
 
       {
-        auth: "user",
+        auth: "user", //bisir li bl supabbase by3rf l user mn l token w y3rf l claims w y3rf l keyName/نحدد أن سياق المصادقة المطلوب هو مصادقة مستخدم
       },
     );
 

@@ -5,7 +5,7 @@ import swaggerSpec from "./config/swagger.js";
 import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./modules/tasks/task.routes.js";
 
-const app = express();
+const app = express(); //ansha2na express app instance la e2dr estaamela la routes w endpoints w configuration w middlewares..
 
 // CORS Configuration
 app.use(
