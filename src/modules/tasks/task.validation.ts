@@ -132,6 +132,107 @@ export const updateTaskSchema = z.object({
 });
 
 // ==========================================
+// DELETE TASK VALIDATION
+// ==========================================
+
+export const deleteTaskSchema = z.object({
+  params: z.object({
+    id: uuidSchema,
+  }),
+});
+
+// ==========================================
+// GET TASK COMMENTS VALIDATION
+// ==========================================
+
+export const getTaskCommentsSchema = z.object({
+  params: z.object({
+    id: uuidSchema,
+  }),
+});
+
+// ==========================================
+// CREATE TASK COMMENT VALIDATION
+// ==========================================
+
+export const createTaskCommentSchema = z.object({
+  params: z.object({
+    id: uuidSchema,
+  }),
+
+  body: z
+    .object({
+      content: z
+        .string()
+        .trim()
+        .min(1, "Comment content is required")
+        .max(5000, "Comment cannot exceed 5000 characters"),
+    })
+    .strict(),
+});
+
+// ==========================================
+// UPDATE TASK COMMENT VALIDATION
+// ==========================================
+
+export const updateTaskCommentSchema = z.object({
+  params: z.object({
+    id: uuidSchema,
+
+    commentId: uuidSchema,
+  }),
+
+  body: z
+    .object({
+      content: z
+        .string()
+        .trim()
+        .min(1, "Comment content is required")
+        .max(5000, "Comment cannot exceed 5000 characters"),
+    })
+    .strict(),
+});
+
+// ==========================================
+// DELETE TASK COMMENT VALIDATION
+// ==========================================
+
+export const deleteTaskCommentSchema = z.object({
+  params: z.object({
+    id: uuidSchema,
+
+    commentId: uuidSchema,
+  }),
+});
+
+// ==========================================
+// EXPORTED COMMENT TYPES
+// ==========================================
+export type GetTaskCommentsParams = z.infer<
+  typeof getTaskCommentsSchema
+>["params"];
+
+export type CreateTaskCommentInput = z.infer<
+  typeof createTaskCommentSchema
+>["body"];
+
+export type UpdateTaskCommentInput = z.infer<
+  typeof updateTaskCommentSchema
+>["body"];
+
+export type CreateTaskCommentParams = z.infer<
+  typeof createTaskCommentSchema
+>["params"];
+
+export type UpdateTaskCommentParams = z.infer<
+  typeof updateTaskCommentSchema
+>["params"];
+
+export type DeleteTaskCommentParams = z.infer<
+  typeof deleteTaskCommentSchema
+>["params"];
+
+// ==========================================
 // EXPORTED TYPES
 // ==========================================
 
@@ -146,3 +247,5 @@ export type GetTaskDetailsParams = z.infer<
 >["params"];
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>["body"];
+
+export type DeleteTaskParams = z.infer<typeof deleteTaskSchema>["params"];

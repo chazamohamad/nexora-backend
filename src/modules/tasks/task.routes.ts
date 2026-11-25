@@ -9,6 +9,11 @@ import {
   createTaskSchema,
   getTaskDetailsSchema,
   updateTaskSchema,
+  deleteTaskSchema,
+  getTaskCommentsSchema,
+  createTaskCommentSchema,
+  updateTaskCommentSchema,
+  deleteTaskCommentSchema,
 } from "./task.validation.js";
 
 import {
@@ -16,6 +21,11 @@ import {
   createTaskController,
   getTaskDetailsController,
   updateTaskController,
+  deleteTaskController,
+  getTaskCommentsController,
+  createTaskCommentController,
+  updateTaskCommentController,
+  deleteTaskCommentController,
 } from "./task.controller.js";
 
 const router = Router();
@@ -211,6 +221,15 @@ router.post(
   createTaskController,
 );
 
+// DELETE: Delete existing task
+
+router.delete(
+  "/tasks/:id",
+  authenticate,
+  validate(deleteTaskSchema),
+  deleteTaskController,
+);
+
 // ==========================================
 // TASK DETAILS - GET & PATCH
 // ==========================================
@@ -348,6 +367,48 @@ router.post(
  *
  *       500:
  *         description: Internal server error.
+ * 
+ *
+ *   delete:
+ *     tags:
+ *       - Tasks
+ *     summary: Delete a task
+ *     description: Delete a task by its ID. The user must have permission to delete it.
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Task UUID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *
+ *     responses:
+ *       200:
+ *         description: Task deleted successfully.
+ *
+ *       400:
+ *         description: Invalid task ID.
+ *
+ *       401:
+ *         description: Unauthorized.
+ *
+ *       403:
+ *         description: Not allowed to delete this task.
+ *
+ *       404:
+ *         description: Task not found.
+ *
+ *       409:
+ *         description: Task has file attachments or related records.
+ *
+ *       500:
+ *         description: Internal server error.
+
  */
 
 // GET: Retrieve task details
@@ -367,5 +428,258 @@ router.patch(
   validate(updateTaskSchema),
   updateTaskController,
 );
+
+/**
+ * @openapi
+ * /api/tasks/{id}/comments:
+ *   get:
+ *     tags:
+ *       - Task Comments
+ *     summary: Get task comments
+ *     description: Retrieve all comments associated with a task, including their authors. The authenticated user must belong to the task's workspace.
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Task UUID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *
+ *     responses:
+ *       200:
+ *         description: Task comments retrieved successfully.
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Task comments retrieved successfully
+ *               data:
+ *                 comments:
+ *                   - id: 11111111-1111-4111-8111-111111111111
+ *                     task_id: 22222222-2222-4222-8222-222222222222
+ *                     user_id: 33333333-3333-4333-8333-333333333333
+ *                     content: The implementation is ready.
+ *                     author:
+ *                       id: 33333333-3333-4333-8333-333333333333
+ *                       full_name: Chaza
+ *                       username: chaza
+ *                       avatar_url: null
+ *                 total: 1
+ *
+ *       400:
+ *         description: Invalid task ID.
+ *
+ *       401:
+ *         description: Missing or invalid access token.
+ *
+ *       403:
+ *         description: User is not authorized to access this workspace.
+ *
+ *       404:
+ *         description: Task not found or inaccessible.
+ *
+ *       500:
+ *         description: Internal server error.
+ * 
+ * 
+ *
+ *   post:
+ *     tags:
+ *       - Task Comments
+ *     summary: Create task comment
+ *     description: Create a comment on a task. The authenticated user is automatically assigned as the comment author.
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Task UUID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties: false
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 maxLength: 5000
+ *                 example: The implementation is ready for testing.
+ *
+ *     responses:
+ *       201:
+ *         description: Comment created successfully.
+ *
+ *       400:
+ *         description: Invalid comment content.
+ *
+ *       401:
+ *         description: Unauthorized.
+ *
+ *       403:
+ *         description: User is not a workspace member or cannot create comments.
+ *
+ *       404:
+ *         description: Task not found.
+ *
+ *       500:
+ *         description: Internal server error.
+
+ */
+
+// ==========================================
+// TASK COMMENTS ROUTES
+// ==========================================
+
+// GET: Retrieve task comments
+
+router.get(
+  "/tasks/:id/comments",
+  authenticate,
+  validate(getTaskCommentsSchema),
+  getTaskCommentsController,
+);
+
+// POST: Create task comment
+
+router.post(
+  "/tasks/:id/comments",
+  authenticate,
+  validate(createTaskCommentSchema),
+  createTaskCommentController,
+);
+
+// PATCH: Update task comment
+
+router.patch(
+  "/tasks/:id/comments/:commentId",
+  authenticate,
+  validate(updateTaskCommentSchema),
+  updateTaskCommentController,
+);
+
+// DELETE: Delete task comment
+
+router.delete(
+  "/tasks/:id/comments/:commentId",
+  authenticate,
+  validate(deleteTaskCommentSchema),
+  deleteTaskCommentController,
+);
+
+/**
+ * @openapi
+ * /api/tasks/{id}/comments/{commentId}:
+ *
+ *   patch:
+ *     tags:
+ *       - Task Comments
+ *     summary: Update task comment
+ *     description: Update a comment. Only its author or a workspace Admin can perform this operation.
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Task UUID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *
+ *       - in: path
+ *         name: commentId
+ *         required: true
+ *         description: Comment UUID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties: false
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 maxLength: 5000
+ *                 example: Updated comment content.
+ *
+ *     responses:
+ *       200:
+ *         description: Comment updated successfully.
+ *       400:
+ *         description: Invalid comment content.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: User is not allowed to update this comment.
+ *       404:
+ *         description: Task or comment not found.
+ *       500:
+ *         description: Internal server error.
+ *
+ *   delete:
+ *     tags:
+ *       - Task Comments
+ *     summary: Delete task comment
+ *     description: Delete a comment. Only its author or a workspace Admin can perform this operation.
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Task UUID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *
+ *       - in: path
+ *         name: commentId
+ *         required: true
+ *         description: Comment UUID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *
+ *     responses:
+ *       200:
+ *         description: Comment deleted successfully.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: User is not allowed to delete this comment.
+ *       404:
+ *         description: Task or comment not found.
+ *       409:
+ *         description: Related records prevent deletion.
+ *       500:
+ *         description: Internal server error.
+ */
 
 export default router;

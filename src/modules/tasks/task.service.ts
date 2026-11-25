@@ -4,6 +4,8 @@ import type {
   GetWorkspaceTasksQuery,
   CreateTaskInput,
   UpdateTaskInput,
+  CreateTaskCommentInput,
+  UpdateTaskCommentInput,
 } from "./task.validation.js";
 
 // ==========================================
@@ -485,4 +487,704 @@ export async function updateTask(
   // 6. Return updated task
 
   return updatedTask;
+}
+
+// ==========================================
+// DELETE TASK
+// ==========================================
+
+export async function deleteTask(
+  supabase: SupabaseClient,
+
+  taskId: string,
+) {
+  // ----------------------------------------
+  // 1. GET TASK AND WORKSPACE ID
+  // ----------------------------------------
+
+  const { data: taskReference, error: referenceError } = await supabase
+
+    .from("tasks")
+
+    .select("id, workspace_id")
+
+    .eq("id", taskId)
+
+    .maybeSingle();
+
+  if (referenceError) {
+    console.error("Get task reference error:", referenceError);
+
+    throw new TaskServiceError(500, "Failed to retrieve task");
+  }
+
+  if (!taskReference) {
+    throw new TaskServiceError(404, "Task not found or inaccessible");
+  }
+
+  // ----------------------------------------
+  // 2. VERIFY WORKSPACE MEMBERSHIP
+  // ----------------------------------------
+
+  await verifyWorkspaceMembership(supabase, taskReference.workspace_id);
+
+  // ----------------------------------------
+  // 3. CHECK TASK ATTACHMENTS
+  // ----------------------------------------
+
+  const { data: attachments, error: attachmentsError } = await supabase
+
+    .from("files")
+
+    .select("id")
+
+    .eq("task_id", taskId)
+
+    .eq("workspace_id", taskReference.workspace_id)
+
+    .limit(1);
+
+  if (attachmentsError) {
+    console.error("Check task attachments error:", attachmentsError);
+
+    throw new TaskServiceError(500, "Failed to check task attachments");
+  }
+
+  if (attachments && attachments.length > 0) {
+    throw new TaskServiceError(
+      409,
+      "Cannot delete this task because it has file attachments. Remove the attachments first.",
+    );
+  }
+
+  // ----------------------------------------
+  // 4. DELETE TASK FROM DATABASE
+  // ----------------------------------------
+
+  const { data: deletedTask, error: deleteError } = await supabase
+
+    .from("tasks")
+
+    .delete()
+
+    .eq("id", taskId)
+
+    .eq("workspace_id", taskReference.workspace_id)
+
+    .select("id")
+
+    .maybeSingle();
+
+  // ----------------------------------------
+  // 5. HANDLE DATABASE ERRORS
+  // ----------------------------------------
+
+  if (deleteError) {
+    console.error("Delete task database error:", deleteError);
+
+    // Foreign key restriction
+
+    if (deleteError.code === "23503") {
+      throw new TaskServiceError(
+        409,
+        "Cannot delete this task because related records still exist",
+      );
+    }
+
+    // Permission denied
+
+    if (deleteError.code === "42501") {
+      throw new TaskServiceError(
+        403,
+        "You are not allowed to delete this task",
+      );
+    }
+
+    throw new TaskServiceError(500, "Failed to delete task");
+  }
+
+  // ----------------------------------------
+  // 6. CHECK DELETION RESULT
+  // ----------------------------------------
+
+  if (!deletedTask) {
+    throw new TaskServiceError(403, "You are not allowed to delete this task");
+  }
+
+  // ----------------------------------------
+  // 7. RETURN DELETED TASK ID
+  // ----------------------------------------
+
+  return {
+    id: deletedTask.id,
+    workspace_id: taskReference.workspace_id,
+  };
+}
+
+// ==========================================
+// GET TASK COMMENTS
+// ==========================================
+
+export async function getTaskComments(
+  supabase: SupabaseClient,
+
+  taskId: string,
+) {
+  // ----------------------------------------
+  // 1. GET TASK AND WORKSPACE ID
+  // ----------------------------------------
+
+  const { data: taskReference, error: referenceError } = await supabase
+
+    .from("tasks")
+
+    .select("id, workspace_id")
+
+    .eq("id", taskId)
+
+    .maybeSingle();
+
+  if (referenceError) {
+    console.error("Get task reference error:", referenceError);
+
+    throw new TaskServiceError(500, "Failed to retrieve task");
+  }
+
+  if (!taskReference) {
+    throw new TaskServiceError(404, "Task not found or inaccessible");
+  }
+
+  // ----------------------------------------
+  // 2. VERIFY WORKSPACE MEMBERSHIP
+  // ----------------------------------------
+
+  await verifyWorkspaceMembership(supabase, taskReference.workspace_id);
+
+  // ----------------------------------------
+  // 3. GET TASK COMMENTS
+  // ----------------------------------------
+
+  const { data: comments, error: commentsError } = await supabase
+
+    .from("task_comments")
+
+    .select("*")
+
+    .eq("task_id", taskId)
+
+    .eq("workspace_id", taskReference.workspace_id)
+
+    .order("created_at", {
+      ascending: true,
+    });
+
+  if (commentsError) {
+    console.error("Get task comments error:", commentsError);
+
+    throw new TaskServiceError(500, "Failed to retrieve task comments");
+  }
+
+  // ----------------------------------------
+  // 4. HANDLE EMPTY COMMENTS
+  // ----------------------------------------
+
+  if (!comments || comments.length === 0) {
+    return {
+      comments: [],
+      total: 0,
+    };
+  }
+
+  // ----------------------------------------
+  // 5. GET COMMENT AUTHORS
+  // ----------------------------------------
+
+  const authorIds = [...new Set(comments.map((comment) => comment.user_id))];
+
+  const { data: authors, error: authorsError } = await supabase
+
+    .from("profiles")
+
+    .select(
+      `
+      id,
+      full_name,
+      username,
+      avatar_url
+    `,
+    )
+
+    .in("id", authorIds);
+
+  if (authorsError) {
+    console.error("Get comment authors error:", authorsError);
+
+    throw new TaskServiceError(500, "Failed to retrieve comment authors");
+  }
+
+  // ----------------------------------------
+  // 6. MAP AUTHORS TO COMMENTS
+  // ----------------------------------------
+
+  const authorsMap = new Map(
+    (authors ?? []).map((author) => [author.id, author]),
+  );
+
+  const commentsWithAuthors = comments.map((comment) => ({
+    ...comment,
+
+    author: authorsMap.get(comment.user_id) ?? null,
+  }));
+
+  // ----------------------------------------
+  // 7. RETURN RESULTS
+  // ----------------------------------------
+
+  return {
+    comments: commentsWithAuthors,
+
+    total: commentsWithAuthors.length,
+  };
+}
+
+// ==========================================
+// CREATE TASK COMMENT
+// ==========================================
+
+export async function createTaskComment(
+  supabase: SupabaseClient,
+
+  taskId: string,
+
+  userId: string,
+
+  input: CreateTaskCommentInput,
+) {
+  // ----------------------------------------
+  // 1. VERIFY TASK EXISTS
+  // ----------------------------------------
+
+  const { data: task, error: taskError } = await supabase
+
+    .from("tasks")
+
+    .select("id, workspace_id")
+
+    .eq("id", taskId)
+
+    .maybeSingle();
+
+  if (taskError) {
+    console.error("Get task error:", taskError);
+
+    throw new TaskServiceError(500, "Failed to retrieve task");
+  }
+
+  if (!task) {
+    throw new TaskServiceError(404, "Task not found or inaccessible");
+  }
+
+  // ----------------------------------------
+  // 2. VERIFY WORKSPACE MEMBERSHIP
+  // ----------------------------------------
+
+  await verifyWorkspaceMembership(supabase, task.workspace_id);
+
+  // ----------------------------------------
+  // 3. PREPARE COMMENT DATA
+  // ----------------------------------------
+
+  const commentData = {
+    task_id: taskId,
+
+    workspace_id: task.workspace_id,
+
+    user_id: userId,
+
+    content: input.content,
+  };
+
+  // ----------------------------------------
+  // 4. INSERT COMMENT
+  // ----------------------------------------
+
+  const { data: comment, error: commentError } = await supabase
+
+    .from("task_comments")
+
+    .insert(commentData)
+
+    .select("*")
+
+    .single();
+
+  // ----------------------------------------
+  // 5. HANDLE DATABASE ERRORS
+  // ----------------------------------------
+
+  if (commentError) {
+    console.error("Create comment error:", commentError);
+
+    if (commentError.code === "42501") {
+      throw new TaskServiceError(
+        403,
+        "You are not allowed to create comments on this task",
+      );
+    }
+
+    if (commentError.code === "23503") {
+      throw new TaskServiceError(400, "Invalid task or user reference");
+    }
+
+    if (commentError.code === "23514" || commentError.code === "P0001") {
+      throw new TaskServiceError(400, "Invalid comment data");
+    }
+
+    throw new TaskServiceError(500, "Failed to create task comment");
+  }
+
+  // ----------------------------------------
+  // 6. GET COMMENT AUTHOR
+  // ----------------------------------------
+
+  const { data: author, error: authorError } = await supabase
+
+    .from("profiles")
+
+    .select(
+      `
+      id,
+      full_name,
+      username,
+      avatar_url
+    `,
+    )
+
+    .eq("id", userId)
+
+    .maybeSingle();
+
+  if (authorError) {
+    console.error("Get comment author error:", authorError);
+
+    throw new TaskServiceError(
+      500,
+      "Comment created but failed to retrieve author information",
+    );
+  }
+
+  // ----------------------------------------
+  // 7. RETURN CREATED COMMENT
+  // ----------------------------------------
+
+  return {
+    ...comment,
+
+    author,
+  };
+}
+
+// ==========================================
+// UPDATE TASK COMMENT
+// ==========================================
+
+export async function updateTaskComment(
+  supabase: SupabaseClient,
+
+  taskId: string,
+
+  commentId: string,
+
+  userId: string,
+
+  input: UpdateTaskCommentInput,
+) {
+  // ----------------------------------------
+  // 1. GET COMMENT
+  // ----------------------------------------
+
+  const { data: comment, error: commentError } = await supabase
+
+    .from("task_comments")
+
+    .select("id, task_id, workspace_id, user_id")
+
+    .eq("id", commentId)
+
+    .eq("task_id", taskId)
+
+    .maybeSingle();
+
+  if (commentError) {
+    console.error("Get comment error:", commentError);
+
+    throw new TaskServiceError(500, "Failed to retrieve comment");
+  }
+
+  if (!comment) {
+    throw new TaskServiceError(404, "Comment not found or inaccessible");
+  }
+
+  // ----------------------------------------
+  // 2. VERIFY WORKSPACE MEMBERSHIP
+  // ----------------------------------------
+
+  await verifyWorkspaceMembership(supabase, comment.workspace_id);
+
+  // ----------------------------------------
+  // 3. VERIFY COMMENT PERMISSION
+  // ----------------------------------------
+
+  const isAuthor = comment.user_id === userId;
+
+  if (!isAuthor) {
+    const { data: isAdmin, error: adminError } = await supabase.rpc(
+      "is_workspace_admin",
+
+      {
+        target_workspace_id: comment.workspace_id,
+      },
+    );
+
+    if (adminError) {
+      console.error("Admin verification error:", adminError);
+
+      throw new TaskServiceError(500, "Failed to verify comment permissions");
+    }
+
+    if (!isAdmin) {
+      throw new TaskServiceError(
+        403,
+        "Only the comment author or workspace Admin can update this comment",
+      );
+    }
+  }
+
+  // ----------------------------------------
+  // 4. UPDATE COMMENT
+  // ----------------------------------------
+
+  const { data: updatedComment, error: updateError } = await supabase
+
+    .from("task_comments")
+
+    .update({
+      content: input.content,
+    })
+
+    .eq("id", commentId)
+
+    .eq("task_id", taskId)
+
+    .eq("workspace_id", comment.workspace_id)
+
+    .select("*")
+
+    .maybeSingle();
+
+  // ----------------------------------------
+  // 5. HANDLE DATABASE ERRORS
+  // ----------------------------------------
+
+  if (updateError) {
+    console.error("Update comment error:", updateError);
+
+    if (updateError.code === "42501") {
+      throw new TaskServiceError(
+        403,
+        "You are not allowed to update this comment",
+      );
+    }
+
+    if (updateError.code === "23514" || updateError.code === "P0001") {
+      throw new TaskServiceError(400, "Invalid comment data");
+    }
+
+    throw new TaskServiceError(500, "Failed to update task comment");
+  }
+
+  if (!updatedComment) {
+    throw new TaskServiceError(
+      403,
+      "You are not allowed to update this comment",
+    );
+  }
+
+  // ----------------------------------------
+  // 6. GET COMMENT AUTHOR
+  // ----------------------------------------
+
+  const { data: author, error: authorError } = await supabase
+
+    .from("profiles")
+
+    .select(
+      `
+      id,
+      full_name,
+      username,
+      avatar_url
+    `,
+    )
+
+    .eq("id", updatedComment.user_id)
+
+    .maybeSingle();
+
+  if (authorError) {
+    console.error("Get updated comment author error:", authorError);
+
+    throw new TaskServiceError(
+      500,
+      "Comment updated but failed to retrieve author information",
+    );
+  }
+
+  // ----------------------------------------
+  // 7. RETURN UPDATED COMMENT
+  // ----------------------------------------
+
+  return {
+    ...updatedComment,
+
+    author,
+  };
+}
+
+// ==========================================
+// DELETE TASK COMMENT
+// ==========================================
+
+export async function deleteTaskComment(
+  supabase: SupabaseClient,
+
+  taskId: string,
+
+  commentId: string,
+
+  userId: string,
+) {
+  // ----------------------------------------
+  // 1. GET COMMENT
+  // ----------------------------------------
+
+  const { data: comment, error: commentError } = await supabase
+
+    .from("task_comments")
+
+    .select("id, task_id, workspace_id, user_id")
+
+    .eq("id", commentId)
+
+    .eq("task_id", taskId)
+
+    .maybeSingle();
+
+  if (commentError) {
+    console.error("Get comment error:", commentError);
+
+    throw new TaskServiceError(500, "Failed to retrieve comment");
+  }
+
+  if (!comment) {
+    throw new TaskServiceError(404, "Comment not found or inaccessible");
+  }
+
+  // ----------------------------------------
+  // 2. VERIFY WORKSPACE MEMBERSHIP
+  // ----------------------------------------
+
+  await verifyWorkspaceMembership(supabase, comment.workspace_id);
+
+  // ----------------------------------------
+  // 3. VERIFY DELETE PERMISSION
+  // ----------------------------------------
+
+  const isAuthor = comment.user_id === userId;
+
+  if (!isAuthor) {
+    const { data: isAdmin, error: adminError } = await supabase.rpc(
+      "is_workspace_admin",
+
+      {
+        target_workspace_id: comment.workspace_id,
+      },
+    );
+
+    if (adminError) {
+      console.error("Admin verification error:", adminError);
+
+      throw new TaskServiceError(500, "Failed to verify comment permissions");
+    }
+
+    if (!isAdmin) {
+      throw new TaskServiceError(
+        403,
+        "Only the comment author or workspace Admin can delete this comment",
+      );
+    }
+  }
+
+  // ----------------------------------------
+  // 4. DELETE COMMENT
+  // ----------------------------------------
+
+  const { data: deletedComment, error: deleteError } = await supabase
+
+    .from("task_comments")
+
+    .delete()
+
+    .eq("id", commentId)
+
+    .eq("task_id", taskId)
+
+    .eq("workspace_id", comment.workspace_id)
+
+    .select("id")
+
+    .maybeSingle();
+
+  // ----------------------------------------
+  // 5. HANDLE DATABASE ERRORS
+  // ----------------------------------------
+
+  if (deleteError) {
+    console.error("Delete comment error:", deleteError);
+
+    if (deleteError.code === "42501") {
+      throw new TaskServiceError(
+        403,
+        "You are not allowed to delete this comment",
+      );
+    }
+
+    if (deleteError.code === "23503") {
+      throw new TaskServiceError(
+        409,
+        "Cannot delete this comment because related records exist",
+      );
+    }
+
+    throw new TaskServiceError(500, "Failed to delete task comment");
+  }
+
+  if (!deletedComment) {
+    throw new TaskServiceError(
+      403,
+      "You are not allowed to delete this comment",
+    );
+  }
+
+  // ----------------------------------------
+  // 6. RETURN DELETED COMMENT
+  // ----------------------------------------
+
+  return {
+    id: deletedComment.id,
+
+    task_id: taskId,
+
+    workspace_id: comment.workspace_id,
+  };
 }
